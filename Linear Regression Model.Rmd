@@ -1,0 +1,59 @@
+---
+title: "ECO 4051 Financial Econometrics"
+author: "Travin Selvarajah"
+subtitle: "Assignment 2 Linear Regression Model (LRM) in R"
+output:
+  pdf_document: default
+  
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=TRUE, 
+               warning=FALSE,
+               comment="",
+               message = FALSE,
+               out.width = "80%",
+               fig.align = 'center',
+               fig.asp = 0.5)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r q1}
+library(quantmod)
+getSymbols(c("IPG","COP","IRM","LDOS","WAT","NSC", "^GSPC"),
+from="2000-01-01", periodicity = "monthly")
+mydata <- merge(Ad(IPG), Ad(COP), Ad(IRM), Ad(LDOS), Ad(WAT), Ad(NSC), Ad(GSPC))
+myret <- na.omit(100 * (log(Ad(mydata)) - lag(log(Ad(mydata)), 1)))
+names(myret) <- c("IPG", "COP","IRM", "LDOS", "WAT", "NSC", "GSPC")
+head(myret, 2)
+tail(myret, 2)
+```
+
+## Question 2 Correlation
+
+You can also embed plots, for example:
+
+```{r Q2, echo=FALSE}
+library(corrplot)
+M = cor(myret)
+corrplot(M, method = 'number') # colorful number
+
+```
+
+## Question 3 Plotting
+
+```{r Q3, echo=FALSE}
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+myretdf <- data.frame(Date=time(myret), coredata(myret))
+wide2long <- arragne(myretdf, Date)+ gather(company, return, Date, GSPC, na.rm=TRUE)
+plot <- ggplot(wide2long, aes(GSPC, return))+ geom_smooth(metohd = "lm")+geom_point()
+p + facet_wrap(vars(company))
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

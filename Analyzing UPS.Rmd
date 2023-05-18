@@ -1,0 +1,107 @@
+---
+title: "Analyzing in R"
+author: "Travin Selvarajah"
+date: "3/23/2022"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r, include = FALSE}
+library(ggplot2)
+library(dplyr)
+library(tidyverse)
+library(readr)
+library(readxl)
+```
+
+```{r Q1, echo = FALSE}
+UPS <- read_excel("/Users/travinsel/Downloads/jlrvm8gvlwqfqtkk.xlsx")
+head(UPS)
+Thedata <- UPS %>% rename (datadate = 'Data Date',
+                          fqtr = 'Fiscal Quarter',
+                          REVTQ = 'Revenue - Total') %>%
+  select(datadate, fqtr, REVTQ)
+Thedata$datadate <- as.Date (Thedata$datadate)
+Thedata
+```
+
+```{r Q2, echo = FALSE}
+pl <-ggplot (Thedata) + geom_line (aes(datadate, REVTQ)) + 
+  theme_bw() + labs(x=NULL, y=NULL)
+p2 <- ggplot(Thedata) + geom_line(aes(datadate, REVTQ - lag(REVTQ)))+ theme_bw() + labs(x=NULL, y=NULL)
+p3 <- ggplot(Thedata) + geom_line(aes(datadate,(REVTQ - lag (REVTQ))/lag(REVTQ))) + theme_bw() + labs (X=NULL, y=NULL)
+gridExtra::grid.arrange (pl, p2, p3, ncol=3, top= "UPS")
+#For UPS quarterly revenue, they have seen an upward trend in its revenue. In 2020, we see it nearly become vertical, I assume its due to COVID. 
+#In plot 2 we see there is giant fluctuations. We could say that it is very difficult to predict its revenue based on past data.
+
+```
+
+```{r Q3, echo = FALSE}
+Thedata <- Thedata %>% mutate(
+  trend = 1:nrow(Thedata),
+  trendsq = trend * trend,
+  trendcb = trend * trend * trend
+)
+
+trend.lin <- lm(REVTQ ~ trend, data = Thedata)
+summary(trend.lin)
+
+trend.quad <- lm(REVTQ ~ trend + trendsq, data = Thedata)
+trend.cube <- lm(REVTQ ~ trend + trendsq + trendcb, data = Thedata)
+
+base.plot <- ggplot(Thedata) + geom_line(aes(datadate, REVTQ), color = "gray", size = 0.8) + theme_classic() + labs( x = NULL, y = NULL)
+p4 <- base.plot + geom_line(aes(datadate, fitted(trend.lin)), color = "red")
+p5 <- base.plot + geom_line(aes(datadate, fitted(trend.quad)), color = "blue")
+p6 <- base.plot + geom_line(aes(datadate, fitted(trend.cube)), color = "green")
+gridExtra::grid.arrange(p4,p5,p6, ncol = 3)
+```
+#The cubic trend (line 3) has a better fit compared to line 1 and 2. 
+
+
+```{r Q4 Q5 Q6}
+#Question 4 #
+Thedata <- Thedata %>% mutate(
+  trend = 1:nrow(Thedata),
+  trendsq = trend * trend,
+  trendcb = trend * trend * trend
+)
+
+trend.lin <- lm(REVTQ ~ trend, data = Thedata)
+summary(trend.lin)
+
+trend.cubic.seas <- lm(REVTQ ~ trend + trendsq + trendcb + factor(fqtr), data= Thedata)
+summary(trend.cubic.seas)
+
+#Question 5#
+trend.cubic.ar <- lm(REVTQ ~ trend + trendsq + trendcb + factor(fqtr) + lag(REVTQ), data = Thedata)
+qplot(Thedata$datadate[-1], residuals(trend.cubic.ar), geom = "line") +
+labs(x=NULL,y=NULL) + theme_bw()
+
+#Question 6#
+trend.cubic.ar.log <- lm(log(REVTQ) ~ trend + trendsq + trendcb + factor(fqtr) + lag(REVTQ), data = Thedata)
+qplot(Thedata$datadate[-1], residuals(trend.cubic.ar.log), geom = "line") +
+labs(x=NULL,y=NULL) + theme_bw()
+
+```
+```
+```{r act}
+library(tseries)
+theData <- as.data.frame(Thedata)
+UPSData <- ts(theData[,-1], start = c(1995,1), frequency = 4)
+head(UPSData,2)
+tail(UPSData,2)
+
+adf.test(UPSData[,"REVTQ"], k = 4)
+
+library(urca)
+test <- ur.df(UPSData[,"REVTQ"], type = "trend", selectlags="BIC")
+summary(test)

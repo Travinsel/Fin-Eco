@@ -1,0 +1,91 @@
+---
+title: "Assignment 4"
+author: "Travin Selvarajah"
+date: "5/19/2022"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+library(quantmod) 
+library(forecast) 
+library(ggplot2) 
+library(tseries) 
+library(TTR) 
+library(fBasics) 
+library(rugarch) 
+VUG <- getSymbols("BIDU", src = "yahoo", from = "1990-01-01", auto.assign = FALSE) 
+price <- Ad(to.daily(VUG)) 
+ret <- 100 * dailyReturn(log(VUG)) %>% na.omit 
+fBasics::basicStats(ret)
+```
+
+We have very fat tails which will automatically indicate that this is not a normal distribution. It is skewed slightly to the left as well.
+
+
+
+```{r, echo=FALSE}
+plot(abs(ret))
+```
+
+So the plot shows that they have had a couple major points in time with high volatility. Majority of the time it is around 1.5 however in extreme cases like 2008 Crisis and 2020 COVID we see jumps to 3 and 2.5. However it is fairly stable.
+
+```{r, echo = FALSE}
+a1 <- ggAcf(ret)+ labs(title="RETURN", subtitle="Log Revenue")
+a2 <- ggAcf(abs(ret))+ labs(title="ABS RETURN", subtitle="Log Revenue") 
+gridExtra::grid.arrange(a1,a2, ncol=2)
+
+```
+The acf return for majority of lag periods is above the 95 % confidence interval. There’s persistence as absolute returns are above the blue line.
+```{r, echo=FALSE}
+adf.test(log(price), alternative = 'stationary')
+
+adf.test(ret, alternative = 'stationary')
+```
+I believe log VUG is non-stationary. The p value is 0.4388 which is greater than 0.05.
+I believe for the regular return, it is stationary as the p value is 0.01
+```{r, echo=FALSE}
+ema06 <- EMA(ret^2, ratio=0.06) 
+plotvol <- plot(abs(ret), col ="grey") 
+plotvol <- addSeries(ema06^0.5, col = "red", on = 1) 
+plotvol
+```
+The EMA06 model is not sensitive to extremes in returns. Since it weighs all observations it is not sensitive to extremes and overtime the weight will reduce.
+```{r, echo=FALSE}
+garchspec <- ugarchspec(mean.model = list(armaOrder = c(0,0)), variance.model = list(model = "gjrGARCH"), distribution.model = "sstd") 
+gjrgarchfit <- ugarchfit(data = ret, spec = garchspec) 
+gjrgarchvol <- sigma(gjrgarchfit) 
+round(gjrgarchfit@fit$matcoef, 3)
+```
+We have a gamma value which means the Rt<0 holds true. EMA is an unrestricted model of a GARCH model
+```{r, echo=FALSE}
+garchspec <- ugarchspec(mean.model = list(armaOrder = c(0,0)), variance.model = list(model = "sGARCH"), distribution.model = "norm") 
+garchfit <- ugarchfit(data = ret, spec = garchspec) 
+round(garchfit@fit$matcoef, 3)
+```
+
+```{r, echo=FALSE}
+sigma <- sigma(garchfit) 
+p1 <- qplot(time(ret), sigma, geom="line", xlab=NULL, ylab="") +theme_bw(base_size = 20) + labs(title="Conditional standard deviation")
+p2 <- ggplot() + geom_point(aes(ema06^0.5, sigma), color="gray70", size=0.3) + geom_abline(intercept=0, slope=1, color="steelblue3", linetype="dashed", size=0.8) + theme_bw(base_size = 15) + labs(x="EMA(0.06)",y="GARCH(1,1)")
+gridExtra::grid.arrange(p1,p2, ncol=2)
+```
+The graph of estimated conditional standard deviations are similar to the EMA06 and absolute return model. The EMA06 and Garch(1,1) have a high correlation coefficient.
+```{r, echo=FALSE}
+nforecast = 250 
+garchforecast <- ugarchforecast(garchfit, n.ahead = nforecast) 
+gjrforecast <- ugarchforecast(gjrgarchfit, n.ahead = nforecast) 
+temp <- data.frame(Date = end(ret) + 1:nforecast, GJR = as.numeric(sigma(gjrforecast)), GARCH = as.numeric(sigma(garchforecast))) 
+ggplot(temp) + geom_line(aes(Date, GARCH), color="tomato3") + geom_line(aes(Date, GJR), color="steelblue2") + geom_hline(yintercept = sd(ret), color="seagreen4", linetype="dashed") + labs(x=NULL, y=NULL, title="Volatility forecasts", subtitle=paste("Forecast date: ", end(ret))) + theme_bw(base_size = 22)
+
+```
+We can see that the GARCH model shows that it is more risky compared to the GJR GARCH Model.
